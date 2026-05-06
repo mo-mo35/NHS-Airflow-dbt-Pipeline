@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: ae_attendances_by_org
+    columns:
+      - name: org_code
+        tests:
+          - not_null
+      - name: total_attendances
+        tests:
+          - not_null
+
+  - name: ae_four_hour_performance
+    columns:
+      - name: org_code
+        tests:
+          - not_null
+      - name: pct_within_4hrs
+        tests:
+          - not_null
+
+  - name: ae_12hr_waits
+    columns:
+      - name: org_code
+        tests:
+          - not_null

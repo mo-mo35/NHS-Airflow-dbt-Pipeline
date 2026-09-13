@@ -1,0 +1,90 @@
+name: nhs-pipeline CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# id-token: write is what lets this workflow request an OIDC token to swap
+# for temporary AWS credentials - nothing here is a stored AWS key.
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-west-2 # match whatever var.aws_region actually is in your tfvars
+  ECR_REPOSITORY: nhs-ae-pipeline
+
+jobs:
+  # Runs on every push and PR. Uses the checked-in fixture, not the live NHS
+  # site, so this job is fast and doesn't depend on an external site being up.
+  dbt-test:
+    name: dbt build + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install dbt-duckdb==1.11.0 duckdb==1.5.5 pandas==3.0.5
+      - name: Run dbt against the CI fixture
+        run: python scripts/ci_test.py
+
+  # Preview-only: shows what would change without touching real infra.
+  # Safe to run on PRs since nothing here can actually modify anything.
+  terraform-plan:
+    name: terraform plan (PR preview)
+    if: github.event_name == 'pull_request'
+    needs: dbt-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GHA_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init
+      - run: terraform plan
+
+  # Only on an actual merge to main - never on a PR, so untrusted PR code
+  # never gets a chance to push an image or touch AWS credentials.
+  build-and-push:
+    name: Build & push image
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: dbt-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GHA_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Log in to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -t "$REGISTRY/$ECR_REPOSITORY:$TAG" -t "$REGISTRY/$ECR_REPOSITORY:latest" .
+          docker push "$REGISTRY/$ECR_REPOSITORY:$TAG"
+          docker push "$REGISTRY/$ECR_REPOSITORY:latest"
+
+  terraform-apply:
+    name: terraform apply
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GHA_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init
+      - run: terraform apply -auto-approve

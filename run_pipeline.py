@@ -30,10 +30,16 @@ import requests
 from bs4 import BeautifulSoup
 from botocore.exceptions import ClientError
 
-DATA_DIR = Path("/app/data")
+# Paths are worked out from where this file sits, not hardcoded to the
+# container's layout. Inside the Docker image this file is /app/run_pipeline.py,
+# so BASE_DIR is /app and everything resolves exactly as before. On a CI runner
+# it's the repo checkout instead - a normal user can't create top-level
+# folders like /app, which is what broke the first CI run.
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "nhs.duckdb"
-DBT_PROJECT_DIR = Path("/app/dbt/nhs_dbt")
-PROFILES_DIR = Path("/root/.dbt")
+DBT_PROJECT_DIR = BASE_DIR / "dbt" / "nhs_dbt"
+PROFILES_DIR = DATA_DIR / "dbt_profiles"
 
 S3_DB_KEY = "warehouse/nhs.duckdb"
 
@@ -146,8 +152,14 @@ def run_dbt() -> None:
     # check=True -> CalledProcessError on a non-zero exit, which main() lets
     # propagate into a non-zero process exit. That's what makes a failing
     # dbt test show up as a FAILED task in ECS instead of disappearing.
-    subprocess.run(["dbt", "run"], cwd=DBT_PROJECT_DIR, check=True)
-    subprocess.run(["dbt", "test"], cwd=DBT_PROJECT_DIR, check=True)
+    # --profiles-dir tells dbt exactly where our generated profiles.yml is,
+    # rather than relying on a hidden folder in whoever's home directory.
+    for command in ("run", "test"):
+        subprocess.run(
+            ["dbt", command, "--profiles-dir", str(PROFILES_DIR)],
+            cwd=DBT_PROJECT_DIR,
+            check=True,
+        )
 
 
 def sync_db_to_s3(s3) -> None:

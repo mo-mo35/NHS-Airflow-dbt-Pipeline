@@ -82,10 +82,13 @@ resource "aws_iam_role_policy" "github_actions_terraform" {
         # known trade-off if it comes up in an interview.
         Effect = "Allow"
         Action = [
-          "ecs:*", "ecr:*", "logs:*", "scheduler:*", "s3:*", "ec2:Describe*",
-          "iam:GetRole", "iam:PassRole", "iam:CreateRole", "iam:DeleteRole", "iam:TagRole",
+          "ecs:*", "ecr:*", "logs:*", "scheduler:*", "s3:*", "budgets:*", "ec2:Describe*",
+          # Read-only IAM: `terraform plan` inspects every role, policy attachment
+          # and OIDC provider it manages, and needs to be allowed to look.
+          "iam:Get*", "iam:List*",
+          "iam:PassRole", "iam:CreateRole", "iam:DeleteRole", "iam:TagRole",
           "iam:AttachRolePolicy", "iam:DetachRolePolicy", "iam:PutRolePolicy",
-          "iam:DeleteRolePolicy", "iam:GetRolePolicy", "iam:ListRolePolicies",
+          "iam:DeleteRolePolicy",
         ]
         Resource = "*"
       }

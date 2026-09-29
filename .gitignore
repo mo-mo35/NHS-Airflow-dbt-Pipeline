@@ -3,3 +3,4 @@ logs/
 nhs.duckdb
 .terraform/
 *.tfstate*
+data/

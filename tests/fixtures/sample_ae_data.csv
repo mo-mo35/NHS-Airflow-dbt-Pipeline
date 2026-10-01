@@ -1,0 +1,4 @@
+Period,Org Code,Org Name,Parent Org,A&E attendances Type 1,A&E attendances Type 2,A&E attendances Other A&E Department,Attendances over 4hrs Type 1,Patients who have waited 12+ hrs from DTA to admission
+2026-07,TST1,Test Trust One,TSTR,8200,150,900,1800,45
+2026-07,TST2,Test Trust Two,TSTR,9100,80,1100,2400,62
+2026-07,TST3,Test Trust Three,TSTR,5400,0,600,1300,28

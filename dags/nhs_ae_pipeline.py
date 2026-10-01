@@ -35,31 +35,31 @@ with DAG(
     schedule_interval='@monthly',
     catchup=False,
     tags=['nhs', 'healthcare']
-) as dag:
+    ) as dag:
 
-    download = PythonOperator(
-        task_id='download_nhs_data',
-        python_callable=download_nhs_data
-    )
+        download = PythonOperator(
+            task_id='download_nhs_data',
+            python_callable=download_nhs_data
+        )
 
-    load = PythonOperator(
-        task_id='load_to_duckdb',
-        python_callable=load_to_duckdb
-    )
+        load = PythonOperator(
+            task_id='load_to_duckdb',
+            python_callable=load_to_duckdb
+        )
 
-    dbt_run = BashOperator(
-    task_id='dbt_run',
-    bash_command="""
-        mkdir -p /home/airflow/.dbt && 
+        dbt_run = BashOperator(
+            task_id='dbt_run',
+            bash_command="""
+        mkdir -p /home/airflow/.dbt
         cat > /home/airflow/.dbt/profiles.yml << 'EOF'
-    nhs_dbt:
-    target: dev
-    outputs:
-        dev:
-        type: duckdb
-        path: /opt/airflow/data/nhs.duckdb
-    EOF
-          cd /opt/airflow/dbt/nhs_dbt && dbt run && dbt test
-      """,
-    )
-    download >> load >> dbt_run
+        nhs_dbt:
+          target: dev
+          outputs:
+            dev:
+              type: duckdb
+              path: /opt/airflow/data/nhs.duckdb
+        EOF
+        cd /opt/airflow/dbt/nhs_dbt && dbt run && dbt test
+        """,
+        )
+download >> load >> dbt_run

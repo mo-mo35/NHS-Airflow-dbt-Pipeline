@@ -96,10 +96,26 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def drop_summary_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """NHS England's monthly export includes a trailing England-wide total
+    row alongside the real per-provider rows - confirmed from the first live
+    run (2026-10-01), where the period column held both a real period and a
+    second, bare 'TOTAL' value with no corresponding organisation. That row
+    isn't a provider record and would double-count any aggregate built on
+    this table, so it's dropped here before anything is loaded."""
+    before = len(df)
+    df = df[df["period"].str.strip().str.upper() != "TOTAL"].copy()
+    dropped = before - len(df)
+    if dropped:
+        print(f"Dropped {dropped} summary/total row(s) (non-provider) from the raw extract")
+    return df
+
+
 def download_csv(url: str) -> pd.DataFrame:
     resp = requests.get(url, timeout=60)
     resp.raise_for_status()
-    return normalize_columns(pd.read_csv(io.BytesIO(resp.content)))
+    df = normalize_columns(pd.read_csv(io.BytesIO(resp.content)))
+    return drop_summary_rows(df)
 
 
 def sync_db_from_s3(s3) -> None:
